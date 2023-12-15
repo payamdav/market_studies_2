@@ -140,6 +140,9 @@ class Trader:
     r.min_duration = np.min(self.ex[self.d != 0] - self.entry[self.d != 0])
     r.max_duration = np.max(self.ex[self.d != 0] - self.entry[self.d != 0])
     r.avg_duration = np.mean(self.ex[self.d != 0] - self.entry[self.d != 0])
+    r.max_trade_count = np.max(self.num)
+    r.max_portfolio_value = np.max(self.val)
+    r.min_portfolio_value = np.min(self.val[self.val != 0])
     self.report = r
     return self
 
