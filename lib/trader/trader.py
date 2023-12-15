@@ -103,8 +103,10 @@ class Trader:
     ex = np.full(trade_count, -1, dtype=np.int32)
     eprice = np.full(trade_count, 0, dtype=float)
     xprice = np.full(trade_count, 0, dtype=float)
+    val = np.full(self.n, 0, dtype=float)
+    num = np.full(self.n, 0, dtype=np.int32)
 
-    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data)
+    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data, val.data, num.data)
     self.reason = np.full(self.n, exit_reasons.noTrade, dtype=np.int32)
     self.ex = np.full(self.n, -1, dtype=np.int32)
     self.eprice = np.full(self.n, 0, dtype=float)
@@ -115,6 +117,8 @@ class Trader:
     self.eprice[entry] = eprice
     self.xprice[entry] = xprice
     self.entry[entry] = entry
+    self.val = val
+    self.num = num
 
     return self
   
