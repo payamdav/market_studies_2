@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from lib.rates.rates import rate_load
+from lib.trader.trader import Trader
 
 
 @pd.api.extensions.register_dataframe_accessor("libs")
@@ -76,3 +77,13 @@ class LibsAccessor:
     temp.columns = [f"{column_name}_norm" for column_name in column_names]
     return pd.concat([self.df, temp], axis=1)
   
+  def trade(self, **kw):
+    defaults = {
+      'o': self.df.o.to_numpy(),
+      'h': self.df.h.to_numpy(),
+      'l': self.df.l.to_numpy(),
+      'c': self.df.c.to_numpy(),
+      'p': 'c',
+    }
+    t = Trader(**(defaults | kw))
+    return t
