@@ -55,6 +55,8 @@ class Trader:
       self.d = np.full(self.n, self.d, dtype=np.int32)
     elif isinstance(self.d, str):
       self.d = np.full(self.n, 1 if self.d == 'long' else -1, dtype=np.int32)
+    if self.d.dtype != np.int32:
+      self.d = self.d.astype(np.int32)
 
     if self.sl is None:
       self.sl = np.full(self.n, -1 * self.d * sys.float_info.max, dtype=float)
@@ -70,6 +72,8 @@ class Trader:
       self.limit = np.full(self.n, self.n, dtype=np.int32)
     elif isinstance(self.limit, (int, float)):
       self.limit = np.full(self.n, self.limit, dtype=np.int32)
+    if self.limit.dtype != np.int32:
+      self.limit = self.limit.astype(np.int32)
 
     if self.sl_type == property_type.percent:
       self.sl = self.p - (self.d * (self.p * self.sl))
