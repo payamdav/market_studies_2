@@ -2,10 +2,11 @@ import pandas as pd
 import numpy as np
 from lib.rates.rates import rate_load
 from lib.trader.trader import Trader
+from lib.indicators.linearRegression import linearRegression, linearRegression_predict, linearRegression_predict_upto
 
 
-@pd.api.extensions.register_dataframe_accessor("libs")
-class LibsAccessor:
+@pd.api.extensions.register_dataframe_accessor("ext")
+class LibsAccessor():
   def __init__(self, df):
     self.df = df
   
@@ -21,62 +22,6 @@ class LibsAccessor:
     temp.reset_index(drop=True, inplace=True)
     return temp
 
-  def insert_previous(self, column_name, previous=1):
-    idx = np.arange(len(self.df))[:, None] - np.arange(1, previous + 1)[None, :]
-    idx = np.clip(idx, 0, len(self.df) - 1)
-    temp = self.df[column_name].to_numpy()[idx]
-    temp[0:previous] = np.nan
-    return pd.concat([self.df, pd.DataFrame(temp, columns=[f"{column_name}_B{i}" for i in range(1, previous + 1)])], axis=1)
-  
-  def apply_on_previous(self, column_name, previous, func, **kwargs):
-    idx = np.arange(len(self.df))[:, None] - np.arange(0, previous)[None, :]
-    idx = np.clip(idx, 0, len(self.df) - 1)
-    temp = self.df[column_name].to_numpy()[idx]
-    r = np.apply_along_axis(func, 1, temp, **kwargs)
-    r[0:previous-1] = np.nan
-    return r
-
-  def insert_slope(self, column_name, previous=1, x_range=0.0001):
-    idx = np.arange(len(self.df))[:, None] - np.arange(0, previous)[None, :]
-    idx = np.clip(idx, 0, len(self.df) - 1)
-    y = self.df[column_name].to_numpy()[idx]
-    Y = y - y.mean(axis=1)[:, None]
-    x = np.linspace(0, x_range * previous, previous)[::-1]
-    X = x - x.mean()
-    slopes = np.dot(Y, X) / np.dot(X, X )
-    return pd.concat([self.df, pd.DataFrame(slopes, columns=[f"{column_name}_slope_{previous}"])], axis=1)
-
-  def insert_sine_slope(self, column_name, previous=1, x_range=0.0001):
-    idx = np.arange(len(self.df))[:, None] - np.arange(0, previous)[None, :]
-    idx = np.clip(idx, 0, len(self.df) - 1)
-    y = self.df[column_name].to_numpy()[idx]
-    Y = y - y.mean(axis=1)[:, None]
-    x = np.linspace(0, x_range * previous, previous)[::-1]
-    X = x - x.mean()
-    slopes = np.dot(Y, X) / np.dot(X, X )
-    sines = slopes / np.sqrt(1 + np.power(slopes, 2))
-    return pd.concat([self.df, pd.DataFrame(sines, columns=[f"{column_name}_sine_{previous}"])], axis=1)
-  
-  def insert_eucledian_distance(self, column_names):
-    if isinstance(column_names, str):
-      column_names = [column_names]
-    if column_names is None:
-      column_names = self.df.columns
-    temp = np.linalg.norm(self.df[column_names], axis=1)
-    tempdf = pd.DataFrame(temp)
-    tempdf.columns = [f"eucledian_{'_'.join(column_names)}"]
-    return pd.concat([self.df, tempdf], axis=1)
-  
-  def insert_normalize_rows(self, column_names):
-    if isinstance(column_names, str):
-      column_names = [column_names]
-    if column_names is None:
-      column_names = self.df.columns
-    norm = np.linalg.norm(self.df[column_names], axis=1)
-    temp = pd.DataFrame(self.df[column_names]/norm[:, None])
-    temp.columns = [f"{column_name}_norm" for column_name in column_names]
-    return pd.concat([self.df, temp], axis=1)
-  
   def trade(self, **kw):
     defaults = {
       'o': self.df.o.to_numpy(),
@@ -87,3 +32,81 @@ class LibsAccessor:
     }
     t = Trader(**(defaults | kw))
     return t
+
+
+# Pandas Series Extension
+
+@pd.api.extensions.register_series_accessor("ext")
+class LibsAccessorSerries():
+  def __init__(self, s):
+    self.s = s
+
+  def previous(self, period=1):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period, 0, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    temp = self.s.to_numpy()[idx]
+    temp[0:period] = np.nan
+    return pd.DataFrame(temp, index=self.s.index, columns=[f"{self.s.name}_B{i}" for i in range(1, period + 1)])
+  
+  def apply_on_previous(self, period, func, **kwargs):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    temp = self.s.to_numpy()[idx]
+    r = np.apply_along_axis(func, 1, temp, **kwargs)
+    r[0:period-1] = np.nan
+    return pd.Series(r, index=self.s.index, name=f"{self.s.name}_apply_on_previous{period}")
+
+  def ma(self, period=1):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    temp = self.s.to_numpy()[idx]
+    return pd.Series(temp.mean(axis=1), index=self.s.index, name=f"{self.s.name}_ma{period}")
+  
+  def slope(self, period=1, x_step=0.0001):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    y = self.s.to_numpy()[idx]
+    Y = y - y.mean(axis=1)[:, None]
+    x = (np.arange(period) * x_step)
+    X = x - x.mean()
+    slopes = np.dot(Y, X) / np.dot(X, X )
+    return pd.Series(slopes, index=self.s.index, name=f"{self.s.name}_slope{period}")
+  
+  def sine_slope(self, period=1, x_step=0.0001):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    y = self.s.to_numpy()[idx]
+    Y = y - y.mean(axis=1)[:, None]
+    x = (np.arange(period) * x_step)
+    X = x - x.mean()
+    slopes = np.dot(Y, X) / np.dot(X, X )
+    sines = slopes / np.sqrt(1 + np.power(slopes, 2))
+    return pd.Series(sines, index=self.s.index, name=f"{self.s.name}_sine_slope{period}")
+    
+  def lsma(self, period=1):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    y = self.s.to_numpy()[idx]
+    temp = linearRegression_predict(y, 0)
+    return pd.Series(temp, index=self.s.index, name=f"{self.s.name}_lsma{period}")
+  
+  def lr(self, period=1, xStep=1):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    y = self.s.to_numpy()[idx]
+    slopes, intercepts = linearRegression(y, xStep)
+    return pd.DataFrame({f"{self.s.name}_slope{period}": slopes, f"{self.s.name}_intercept{period}": intercepts}, index=self.s.index)
+  
+  def lr_predict(self, period=1, next=1):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    y = self.s.to_numpy()[idx]
+    temp = linearRegression_predict(y, next)
+    return pd.Series(temp, index=self.s.index, name=f"{self.s.name}_lr_predict{period}_{next}")
+  
+  def lr_predict_upto(self, period=1, upto=1):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    y = self.s.to_numpy()[idx]
+    temp = linearRegression_predict_upto(y, upto)
+    return pd.DataFrame(temp, index=self.s.index, columns=[f"{self.s.name}_lr_predict{period}_{i}" for i in range(1, upto + 1)])
