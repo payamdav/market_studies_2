@@ -32,6 +32,12 @@ class LibsAccessor():
     }
     t = Trader(**(defaults | kw))
     return t
+  
+  def forward_min_max_index(self, period):
+    min_index, min_val = self.df.l.ext.forward_min_index(period)
+    max_index, max_val = self.df.h.ext.forward_max_index(period)
+    return min_index, max_index, min_val, max_val
+  
 
 
 # Pandas Series Extension
@@ -110,3 +116,29 @@ class LibsAccessorSerries():
     y = self.s.to_numpy()[idx]
     temp = linearRegression_predict_upto(y, upto)
     return pd.DataFrame(temp, index=self.s.index, columns=[f"{self.s.name}_lr_predict{period}_{i}" for i in range(1, upto + 1)])
+  
+  def forward_min_index(self, period):
+    idx = np.arange(len(self.s))[:, None] + np.arange(0, period)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    temp = self.s.to_numpy()[idx]
+    min_index = np.argmin(temp, axis=1) + self.s.index
+    min_val = self.s.to_numpy()[min_index]
+    return pd.Series(min_index, index=self.s.index, name="min_index"), pd.Series(min_val, index=self.s.index, name="min_val")
+  
+  def forward_max_index(self, period):
+    idx = np.arange(len(self.s))[:, None] + np.arange(0, period)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    temp = self.s.to_numpy()[idx]
+    max_index = np.argmax(temp, axis=1) + self.s.index
+    max_val = self.s.to_numpy()[max_index]
+    return pd.Series(max_index, index=self.s.index, name="max_index"), pd.Series(max_val, index=self.s.index, name="max_val")
+
+  def forward_min_max_index(self, period):
+    idx = np.arange(len(self.s))[:, None] + np.arange(0, period)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    temp = self.s.to_numpy()[idx]
+    min_index = np.argmin(temp, axis=1) + self.s.index
+    max_index = np.argmax(temp, axis=1) + self.s.index
+    min_val = self.s.to_numpy()[min_index]
+    max_val = self.s.to_numpy()[max_index]
+    return pd.Series(min_index, index=self.s.index, name="min_index"), pd.Series(max_index, index=self.s.index, name="max_index"), pd.Series(min_val, index=self.s.index, name="min_val"), pd.Series(max_val, index=self.s.index, name="max_val")
