@@ -171,6 +171,7 @@ class Trader:
 
     candlesticks = dict(
       type='candlestick',
+      name='Candlesticks',
       # x=self.t,
       x=list(range(self.n)),
       open=self.o,
@@ -181,6 +182,7 @@ class Trader:
 
     longs = dict(
       type='scatter',
+      name='Longs',
       x=np.column_stack((self.entry[self.d == 1], self.ex[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(),
       y=np.column_stack((self.eprice[self.d == 1], self.xprice[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(),
       mode='markers+lines',
@@ -197,6 +199,7 @@ class Trader:
 
     shorts = dict(
       type='scatter',
+      name='Shorts',
       x=np.column_stack((self.entry[self.d == -1], self.ex[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(),
       y=np.column_stack((self.eprice[self.d == -1], self.xprice[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(),
       mode='markers+lines',

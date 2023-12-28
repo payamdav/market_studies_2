@@ -53,6 +53,7 @@ def main():
 
   maxv = df.v.max()
 
+  atr = df.ext.atr(14)
   p_last = ((df.h + df.l + df.c) / 3).ext.ma(timeperiod_check).shift(1)
   h_last = df.h.ext.ma(timeperiod_check).shift(1)
   l_last = df.l.ext.ma(timeperiod_check).shift(1)
@@ -75,8 +76,14 @@ def main():
   r5 = p_last + 5 * (p_last - l_last)
 
   long_s1 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) > df.c) & (df.c > s1) & (df.l < s1) & (df.c < df.o) & ((df.o - df.c) < (df.c - df.l))
-  short_r1 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) < df.c) & (df.c < r1) & (df.h > r1) & (df.c > df.o) & ((df.c - df.o) < (df.h - df.c))
+  long_s2 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) > df.c) & (df.c > s2) & (df.l < s2) & (df.c < df.o) & ((df.o - df.c) < (df.c - df.l))
+  long_s3 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) > df.c) & (df.c > s3) & (df.l < s3) & (df.c < df.o) & ((df.o - df.c) < (df.c - df.l))
+  long_s4 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) > df.c) & (df.c > s4) & (df.l < s4) & (df.c < df.o) & ((df.o - df.c) < (df.c - df.l))
   long_s5 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) > df.c) & (df.c > s5) & (df.l < s5) & (df.c < df.o) & ((df.o - df.c) < (df.c - df.l))
+  short_r1 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) < df.c) & (df.c < r1) & (df.h > r1) & (df.c > df.o) & ((df.c - df.o) < (df.h - df.c))
+  short_r2 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) < df.c) & (df.c < r2) & (df.h > r2) & (df.c > df.o) & ((df.c - df.o) < (df.h - df.c))
+  short_r3 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) < df.c) & (df.c < r3) & (df.h > r3) & (df.c > df.o) & ((df.c - df.o) < (df.h - df.c))
+  short_r4 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) < df.c) & (df.c < r4) & (df.h > r4) & (df.c > df.o) & ((df.c - df.o) < (df.h - df.c))
   short_r5 = (df.v > df.v.ext.ma(10)) & (df.v > 0) & (df.c.shift(1) < df.c) & (df.c < r5) & (df.h > r5) & (df.c > df.o) & ((df.c - df.o) < (df.h - df.c))
 
   print(f'long s1 count: {np.count_nonzero(long_s1)}')
@@ -84,6 +91,9 @@ def main():
   print(f'long s5 count: {np.count_nonzero(long_s5)}')
   print(f'short r5 count: {np.count_nonzero(short_r5)}')
 
+  print(f'l_s_1: {np.count_nonzero(long_s1)} - l_s_2: {np.count_nonzero(long_s2)} - l_s_3: {np.count_nonzero(long_s3)} - l_s_4: {np.count_nonzero(long_s4)} - l_s_5: {np.count_nonzero(long_s5)}')
+  print(f's_r_1: {np.count_nonzero(short_r1)} - s_r_2: {np.count_nonzero(short_r2)} - s_r_3: {np.count_nonzero(short_r3)} - s_r_4: {np.count_nonzero(short_r4)} - s_r_5: {np.count_nonzero(short_r5)}')
+  
   traces.append(dict(type='candlestick', name='Candles', x=df.index, open=df.o, high=df.h, low=df.l, close=df.c, yaxis='y1'))
   traces.append(dict(type='scatter', name='s1', x=df.index, y=s1, yaxis='y1'))
   traces.append(dict(type='scatter', name='s2', x=df.index, y=s2, yaxis='y1'))
@@ -103,8 +113,14 @@ def main():
   traces.append(dict(type='bar', name='Volume', x=df.index, y=df.v, yaxis='y2'))
   # traces.append(dict(type='scatter', name='Volume3',  x=df.index,  y=df.v.ext.ema(14),  yaxis='y2'))
   traces.append(dict(type='scatter', name='long_s1', x=df.index, y=maxv * long_s1.mask(long_s1 == False), mode='markers' ,yaxis='y2'))
-  traces.append(dict(type='scatter', name='short_r1', x=df.index, y=maxv * short_r1.mask(short_r1 == False), mode='markers' ,yaxis='y2'))
+  traces.append(dict(type='scatter', name='long_s2', x=df.index, y=maxv * long_s2.mask(long_s2 == False), mode='markers' ,yaxis='y2'))
+  traces.append(dict(type='scatter', name='long_s3', x=df.index, y=maxv * long_s3.mask(long_s3 == False), mode='markers' ,yaxis='y2'))
+  traces.append(dict(type='scatter', name='long_s4', x=df.index, y=maxv * long_s4.mask(long_s4 == False), mode='markers' ,yaxis='y2'))
   traces.append(dict(type='scatter', name='long_s5', x=df.index, y=maxv * long_s5.mask(long_s5 == False), mode='markers' ,yaxis='y2'))
+  traces.append(dict(type='scatter', name='short_r1', x=df.index, y=maxv * short_r1.mask(short_r1 == False), mode='markers' ,yaxis='y2'))
+  traces.append(dict(type='scatter', name='short_r2', x=df.index, y=maxv * short_r2.mask(short_r2 == False), mode='markers' ,yaxis='y2'))
+  traces.append(dict(type='scatter', name='short_r3', x=df.index, y=maxv * short_r3.mask(short_r3 == False), mode='markers' ,yaxis='y2'))
+  traces.append(dict(type='scatter', name='short_r4', x=df.index, y=maxv * short_r4.mask(short_r4 == False), mode='markers' ,yaxis='y2'))  
   traces.append(dict(type='scatter', name='short_r5', x=df.index, y=maxv * short_r5.mask(short_r5 == False), mode='markers' ,yaxis='y2'))
 
   
