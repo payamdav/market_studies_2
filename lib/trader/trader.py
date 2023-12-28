@@ -2,6 +2,10 @@ import numpy as np
 import sys
 from types import SimpleNamespace
 from lib.trader.hypertrader import hyperTrader
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Cursor
+from plotly import graph_objects as go
 
 property_type = SimpleNamespace(
   absolute=0,
@@ -20,6 +24,7 @@ exit_reasons = SimpleNamespace(
 class Trader:
   def __init__(self, **kw):
     defaults = {
+      't': None,
       'o': None,
       'h': None,
       'l': None,
@@ -146,5 +151,116 @@ class Trader:
     self.report = r
     return self
 
+  def plot(self):
+    self.plot_orders()
+    # self.plot_portfolio()
+    # self.plot_concurrency()
+    return self
+  
+  def plot_orders(self):
+    layout = dict(
+      title='Trade',
+      xaxis_title='Time',
+      yaxis_title='Price',
+      # xaxis_rangeslider_visible=False,
+      yaxis=dict(
+        autorange=True,
+        fixedrange=False,
+      ),
+    )
 
+    candlesticks = dict(
+      type='candlestick',
+      # x=self.t,
+      x=list(range(self.n)),
+      open=self.o,
+      high=self.h,
+      low=self.l,
+      close=self.c,
+    )
+
+    longs = dict(
+      type='scatter',
+      x=np.column_stack((self.entry[self.d == 1], self.ex[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(),
+      y=np.column_stack((self.eprice[self.d == 1], self.xprice[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(),
+      mode='markers+lines',
+      marker=dict(
+        color='blue',
+        size=6,
+        symbol='triangle-up',
+      ),
+      line=dict(
+        color='blue',
+        width=1,
+      ),
+    )
+
+    shorts = dict(
+      type='scatter',
+      x=np.column_stack((self.entry[self.d == -1], self.ex[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(),
+      y=np.column_stack((self.eprice[self.d == -1], self.xprice[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(),
+      mode='markers+lines',
+      marker=dict(
+        color='orange',
+        size=6,
+        symbol='triangle-up',
+      ),
+      line=dict(
+        color='orange',
+        width=1,
+      ),
+    )
+
+    fig = go.Figure([candlesticks, longs, shorts], layout).show()
+    return self
+
+  def plot_portfolio(self):
+    layout = dict(
+      title='Portfolio',
+      xaxis_title='Time',
+      yaxis_title='Value',
+      # xaxis_rangeslider_visible=False,
+      yaxis=dict(
+        autorange=True,
+        fixedrange=False,
+      ),
+    )
+
+    portfolio = dict(
+      type='scatter',
+      x=list(range(self.n)),
+      y=self.val,
+      mode='lines',
+      line=dict(
+        color='blue',
+        width=1,
+      ),
+    )
+
+    fig = go.Figure([portfolio], layout).show()
+    return self
+  
+  def plot_concurrency(self):
+    layout = dict(
+      title='Concurrency',
+      xaxis_title='Time',
+      yaxis_title='Concurrency',
+      # xaxis_rangeslider_visible=False,
+      yaxis=dict(
+        autorange=True,
+        fixedrange=False,
+      ),
+    )
+
+    concurrency = dict(
+      type='bar',
+      x=list(range(self.n)),
+      y=self.num,
+      marker=dict(
+        color='blue',
+      ),
+
+    )
+    fig = go.Figure([concurrency], layout).show()
+    return self
   

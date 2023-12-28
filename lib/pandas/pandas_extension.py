@@ -3,6 +3,24 @@ import numpy as np
 from lib.rates.rates import rate_load
 from lib.trader.trader import Trader
 from lib.indicators.linearRegression import linearRegression, linearRegression_predict, linearRegression_predict_upto
+from lib.utils.timer import TimerProfiler
+from KDEpy import FFTKDE, NaiveKDE, TreeKDE
+from matplotlib import pyplot as plt
+from matplotlib.widgets import Cursor
+
+
+timer = TimerProfiler('pandas_extension')
+
+def ewm_weights(period, *,alpha=None, com=None, span=None):
+  if all([x is None for x in [alpha, com, span]]):
+    span = period
+  if alpha is None:
+    if com is None:
+      alpha = 2 / (span + 1)
+    else:
+      alpha = 1 / (1 + com)
+  r = (1 - alpha)**np.arange(period)
+  return r[::-1]
 
 
 @pd.api.extensions.register_dataframe_accessor("ext")
@@ -24,6 +42,7 @@ class LibsAccessor():
 
   def trade(self, **kw):
     defaults = {
+      't': self.df.t.to_numpy(),
       'o': self.df.o.to_numpy(),
       'h': self.df.h.to_numpy(),
       'l': self.df.l.to_numpy(),
@@ -37,6 +56,84 @@ class LibsAccessor():
     min_index, min_val = self.df.l.ext.forward_min_index(period)
     max_index, max_val = self.df.h.ext.forward_max_index(period)
     return min_index, max_index, min_val, max_val
+
+  def expectancy(self, period, p_step=0.00001, bw=0.001):
+    d = self.df[['h', 'l', 'c']].to_numpy().reshape(-1)
+    dv = self.df[['v', 'v', 'v']].to_numpy().reshape(-1)
+    idx = (np.arange(len(d))[:, None] - np.arange(3 * period-1, -1, -1)[None, :] + 2)[::3]
+    idx = np.clip(idx, 0, len(d) - 1)
+    samples = d[idx]
+    weights = dv[idx]
+    r = np.array([0.0] * len(samples))
+    for i in range(len(samples)):
+      p_min, p_max = samples[i].min(), samples[i].max()
+      p_range = np.arange(p_min, p_max + p_step, p_step)
+      kernel = NaiveKDE(kernel='gaussian', bw=bw).fit(samples[i], weights=weights[i])
+      kde = kernel.evaluate(p_range)
+      r[i] = (p_range @ kde) / kde.sum()
+    return pd.Series(r, index=self.df.index, name=f"expectancy{period}")
+    
+  def expectancy_check(self, period, p_step=0.00001, bw=0.001):
+    d = self.df[['h', 'l', 'c']].to_numpy().reshape(-1)
+    dv = self.df[['v', 'v', 'v']].to_numpy().reshape(-1)
+    idx = (np.arange(len(d))[:, None] - np.arange(3 * period-1, -1, -1)[None, :] + 2)[::3]
+    idx = np.clip(idx, 0, len(d) - 1)
+    samples = d[idx]
+    weights = dv[idx]
+    i = period + 10
+    p_min, p_max = samples[i].min(), samples[i].max()
+    p_range = np.arange(p_min, p_max + p_step, p_step)
+    kernel = NaiveKDE(kernel='gaussian', bw=bw).fit(samples[i], weights=weights[i])
+    kde = kernel.evaluate(p_range)
+    r = (p_range @ kde) / kde.sum()
+    print(f"p_min: {p_min}, p_max: {p_max}, r: {r}")
+    fig, ax = plt.subplots(figsize=(18,8), nrows=1, ncols=1)
+    # secax.plot(kde, p_range, 'r')
+    plt.barh(p_range, kde, height=p_step/2, color='r', alpha=0.8)
+
+    Cursor(ax, useblit=True, color='red', linewidth=2)
+
+    plt.show()
+  
+  def kde_anal(self, p_step=0.0001, bw=0.001):
+    timer.checkpoint('start')
+    d = self.df[['h', 'l', 'c']].to_numpy().reshape(-1)
+    dv = self.df[['v', 'v', 'v']].to_numpy().reshape(-1)
+    p_min, p_max = d.min(), d.max()
+    p_range = np.arange(p_min, p_max + p_step, p_step)
+    timer.checkpoint('data prepare')
+    kernel = TreeKDE(kernel='gaussian', bw='ISJ').fit(d, weights=dv)
+    timer.checkpoint('kde fit')
+    kde = kernel.evaluate(p_range)
+    timer.checkpoint('kde evaluate')
+    r = (p_range @ kde) / kde.sum()
+    timer.checkpoint('r calc')
+    print(f"p_min: {p_min}, p_max: {p_max}, r: {r}")
+    print(f"Kernel bw: {kernel.bw}")
+    # print(NaiveKDE._bw_methods.keys())
+    fig, ax = plt.subplots(figsize=(18,8), nrows=1, ncols=1)
+    p = (self.df.h + self.df.l + self.df.c) / 3
+    ax.plot(self.df.index, p, 'b', markersize=2)
+    ax.set_xlabel('Index')
+    ax.set_ylabel('Price')
+    secax = ax.twiny()
+    secax.set_xlabel('KDE')
+    secax.set_xmargin(2)
+    # secax.barh(p_range, kde, height=p_step/2, color='r', alpha=0.8)
+    # secax.barh(p_range, kde, height=p_step/5, color='r', alpha=0.8)
+    secax.plot(kde, p_range, 'r')
+    timer.checkpoint('plot')
+    cursor = Cursor(ax, useblit=True, color='red', linewidth=2)
+    plt.show()
+  
+  def atr(self, period):
+    # average true range
+    tr = self.df.h - self.df.l
+    tr = pd.concat([tr, (self.df.h - self.df.c.shift(1)).abs(), (self.df.l - self.df.c.shift(1)).abs()], axis=1).max(axis=1)
+    temp_atr = tr.ewm(span=period, adjust=False).mean()
+    return pd.Series(temp_atr, index=self.df.index, name=f"atr{period}")
+  
+  
   
 
 
@@ -68,6 +165,11 @@ class LibsAccessorSerries():
     temp = self.s.to_numpy()[idx]
     return pd.Series(temp.mean(axis=1), index=self.s.index, name=f"{self.s.name}_ma{period}")
   
+  def wma(self, period=1, weights=None):
+    idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
+    idx = np.clip(idx, 0, len(self.s) - 1)
+    return pd.Series(np.average(self.s.to_numpy()[idx], 1, weights=weights.to_numpy()[idx]), index=self.s.index, name=f"{self.s.name}_wma{period}")
+
   def slope(self, period=1, x_step=0.0001):
     idx = np.arange(len(self.s))[:, None] - np.arange(period-1, -1, -1)[None, :]
     idx = np.clip(idx, 0, len(self.s) - 1)
@@ -142,3 +244,7 @@ class LibsAccessorSerries():
     min_val = self.s.to_numpy()[min_index]
     max_val = self.s.to_numpy()[max_index]
     return pd.Series(min_index, index=self.s.index, name="min_index"), pd.Series(max_index, index=self.s.index, name="max_index"), pd.Series(min_val, index=self.s.index, name="min_val"), pd.Series(max_val, index=self.s.index, name="max_val")
+  
+  def ema(self, period):
+    return self.s.ewm(span=period, adjust=False).mean()
+  
