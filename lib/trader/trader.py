@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Cursor
 from plotly import graph_objects as go
+from plotly.offline import iplot
 
 property_type = SimpleNamespace(
   absolute=0,
@@ -214,7 +215,8 @@ class Trader:
       ),
     )
 
-    fig = go.Figure([candlesticks, longs, shorts], layout).show()
+    # fig = go.Figure([candlesticks, longs, shorts], layout).show()
+    iplot({'data':[candlesticks, longs, shorts], 'layout':layout})
     return self
 
   def plot_portfolio(self):
