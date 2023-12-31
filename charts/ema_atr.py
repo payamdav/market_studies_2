@@ -3,6 +3,7 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 import lib.pandas.pandas_extension
+from lib.indicators.levelizer import levelizer_by_absolute_threshold, levelizer_by_absolute_threshold_adjust
 
 layout = dict(
   title='Candles',
@@ -45,8 +46,8 @@ traces = []
 
 def main():
   df = pd.DataFrame().ext.load('EURUSD')
-  df = df.ext.resample_candles('5T')
-  df = df[-1000:]
+  df = df.ext.resample_candles('1T')
+  df = df[-10000:]
   df.reset_index(inplace=True, drop=True)
 
   timeperiod_check = 240
@@ -54,8 +55,9 @@ def main():
   maxv = df.v.max()
 
   p = (df.h + df.l + df.c) / 3
-  ema1 = df.c.ext.ema(8)
-  ema2 = df.c.ext.ema(21)
+  l1 = levelizer_by_absolute_threshold(p, df.ext.atr(14) * 1.5)
+  ema1 = p.ext.ema(8)
+  ema2 = p.ext.ema(21)
   atr = df.ext.atr(14)
 
   s1 = ema1 - atr
@@ -65,8 +67,10 @@ def main():
 
 
   traces.append(dict(type='candlestick', name='Candles', x=df.index, open=df.o, high=df.h, low=df.l, close=df.c, yaxis='y1'))
+  traces.append(dict(type='scatter', name='p', x=df.index, y=p, yaxis='y1'))
   traces.append(dict(type='scatter', name='ema1', x=df.index, y=ema1, yaxis='y1'))
   traces.append(dict(type='scatter', name='ema2', x=df.index, y=ema2, yaxis='y1'))
+  traces.append(dict(type='scatter', name='l1', x=df.index, y=l1, yaxis='y1'))
 
   traces.append(dict(type='scatter', name='s1', x=df.index, y=s1, yaxis='y1'))
   traces.append(dict(type='scatter', name='s2', x=df.index, y=s2, yaxis='y1'))

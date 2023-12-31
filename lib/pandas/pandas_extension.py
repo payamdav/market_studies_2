@@ -48,6 +48,7 @@ class LibsAccessor():
       'l': self.df.l.to_numpy(),
       'c': self.df.c.to_numpy(),
       'p': 'c',
+      'spread': self.df.s.to_numpy() / 100000,
     }
     t = Trader(**(defaults | kw))
     return t
@@ -247,4 +248,7 @@ class LibsAccessorSerries():
   
   def ema(self, period):
     return self.s.ewm(span=period, adjust=False).mean()
+  
+  def wema(self, period, weights):
+    return self.s.ext.wma(period, weights=weights).ewm(span=period, adjust=False).mean()
   

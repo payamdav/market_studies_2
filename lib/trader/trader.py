@@ -31,11 +31,15 @@ class Trader:
       'l': None,
       'c': None,
       'p': None,
+      'spread': None,
 
       'd': None,
       'tp': None,
       'sl': None,
       'limit': None,
+      'trail': None,
+      'trail_activation': None,
+      'risk_free': None,
 
       'sl_type': property_type.absolute,
       'tp_type': property_type.absolute,
@@ -80,6 +84,22 @@ class Trader:
       self.limit = np.full(self.n, self.limit, dtype=np.int32)
     if self.limit.dtype != np.int32:
       self.limit = self.limit.astype(np.int32)
+    if self.spread is None:
+      self.spread = np.full(self.n, 0, dtype=float)
+    elif isinstance(self.spread, (int, float)):
+      self.spread = np.full(self.n, self.spread, dtype=float)
+    if self.trail is None:
+      self.trail = np.full(self.n, -1, dtype=float)
+    elif isinstance(self.trail, (int, float)):
+      self.trail = np.full(self.n, self.trail, dtype=float)
+    if self.trail_activation is None:
+      self.trail_activation = np.full(self.n, 0, dtype=float)
+    elif isinstance(self.trail_activation, (int, float)):
+      self.trail_activation = np.full(self.n, self.trail_activation, dtype=float)
+    if self.risk_free is None:
+      self.risk_free = np.full(self.n, -1, dtype=float)
+    elif isinstance(self.risk_free, (int, float)):
+      self.risk_free = np.full(self.n, self.risk_free, dtype=float)
 
     if self.sl_type == property_type.percent:
       self.sl = self.p - (self.d * (self.p * self.sl))
@@ -104,15 +124,20 @@ class Trader:
     sl = self.sl[entry].copy()
     tp = self.tp[entry].copy()
     limit = self.limit[entry].copy()
+    trail = self.trail[entry].copy()
+    trail_activation = self.trail_activation[entry].copy()
+    risk_free = self.risk_free[entry].copy()
 
     reason = np.full(trade_count, exit_reasons.unknown, dtype=np.int32)
     ex = np.full(trade_count, -1, dtype=np.int32)
     eprice = np.full(trade_count, 0, dtype=float)
     xprice = np.full(trade_count, 0, dtype=float)
     val = np.full(self.n, 0, dtype=float)
+    eprofit = np.full(self.n, 0, dtype=float)
     num = np.full(self.n, 0, dtype=np.int32)
+    win = np.full(self.n, 0, dtype=np.int32)
 
-    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data, val.data, num.data)
+    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data, val.data, num.data, self.spread.copy().data, eprofit.data, win.data, trail.data, trail_activation.data, risk_free.data)
     self.reason = np.full(self.n, exit_reasons.noTrade, dtype=np.int32)
     self.ex = np.full(self.n, -1, dtype=np.int32)
     self.eprice = np.full(self.n, 0, dtype=float)
@@ -125,6 +150,8 @@ class Trader:
     self.entry[entry] = entry
     self.val = val
     self.num = num
+    self.win = win
+    self.eprofit = eprofit
 
     return self
   
@@ -133,139 +160,83 @@ class Trader:
     r.count = self.d.nonzero()[0].size
     r.count_long = np.count_nonzero(self.d == 1)
     r.count_short = np.count_nonzero(self.d == -1)
-    r.count_win = np.count_nonzero(self.reason == exit_reasons.tp)
-    r.count_loss = np.count_nonzero(self.reason == exit_reasons.sl)
+    r.count_win = np.count_nonzero(self.win)
+    r.count_loss = r.count - r.count_win
     r.count_limit = np.count_nonzero(self.reason == exit_reasons.limit)
     r.win_rate = r.count_win / r.count if r.count > 0 else 0
     r.loss_rate = r.count_loss / r.count if r.count > 0 else 0
-    r.profit = np.sum(self.xprice - self.eprice)
-    r.profit_long = np.sum(self.xprice[self.d == 1] - self.eprice[self.d == 1])
-    r.profit_short = np.sum(self.xprice[self.d == -1] - self.eprice[self.d == -1])
-    r.profit_win = np.sum(self.xprice[self.reason == exit_reasons.tp] - self.eprice[self.reason == exit_reasons.tp])
-    r.profit_loss = np.sum(self.xprice[self.reason == exit_reasons.sl] - self.eprice[self.reason == exit_reasons.sl])
+    r.profit_long_no_spread = np.sum(self.xprice[self.d == 1] - self.eprice[self.d == 1])
+    r.profit_short_no_spread = np.sum(self.eprice[self.d == -1] - self.xprice[self.d == -1])
+    r.profit_no_spread = r.profit_long_no_spread + r.profit_short_no_spread
+    r.profit_long = np.sum(self.eprofit[self.d == 1])
+    r.profit_short = np.sum(self.eprofit[self.d == -1])
+    r.profit = r.profit_long + r.profit_short
+    r.total_spread = r.profit_no_spread - r.profit
     r.min_duration = np.min(self.ex[self.d != 0] - self.entry[self.d != 0])
     r.max_duration = np.max(self.ex[self.d != 0] - self.entry[self.d != 0])
     r.avg_duration = np.mean(self.ex[self.d != 0] - self.entry[self.d != 0])
     r.max_trade_count = np.max(self.num)
     r.max_portfolio_value = np.max(self.val)
     r.min_portfolio_value = np.min(self.val[self.val != 0])
+    r.profit_win = np.sum(self.eprofit[self.win == 1])
+    r.profit_loss = np.sum(self.eprofit[self.win == 0])
+    r.average_profit_win = r.profit_win / r.count_win if r.count_win > 0 else 0
+    r.average_profit_loss = r.profit_loss / r.count_loss if r.count_loss > 0 else 0
+    r.average_profit = r.profit / r.count if r.count > 0 else 0
     self.report = r
     return self
+  
+  def print_report(self):
+    for k, v in self.report.__dict__.items():
+      print(f'\033[33m {k}: \033[97m {v}\033[00m ')
+    return self
+  
+  def period_report(self, period):
+    df = pd.DataFrame({'t': self.t, 'eprofit': self.eprofit, 'd': np.abs(self.d), 'win': self.win})
+    r = df.groupby(pd.Grouper(key='t', freq=period)).sum().copy()
+    r['win_rate'] = np.where(r['d'] > 0, r['win'] / r['d'], 0)
+    r['profit'] = np.where(r['d'] > 0, r['eprofit'], 0)
+    r['count'] = r['d']
+    r = r[['count', 'win_rate', 'profit']]
+    return r
 
   def plot(self):
     self.plot_orders()
-    # self.plot_portfolio()
-    # self.plot_concurrency()
     return self
   
-  def plot_orders(self):
-    layout = dict(
-      title='Trade',
-      xaxis_title='Time',
-      yaxis_title='Price',
-      # xaxis_rangeslider_visible=False,
-      yaxis=dict(
-        autorange=True,
-        fixedrange=False,
-      ),
-    )
+  def plot_orders(self, shrink=True):
+    i_start = 0
+    i_end = self.n
+    if shrink:
+      i_start = np.min(self.entry[self.entry >= 0])
+      i_end = np.max(self.ex[self.ex >= 0])
+    layout = dict(title='Trade', xaxis_title='Time', yaxis_title='Price', yaxis=dict(autorange=True, fixedrange=False))
+    candlesticks = dict(type='candlestick', name='Candlesticks', x=np.arange(i_start,i_end), open=self.o[i_start:i_end], high=self.h[i_start:i_end], low=self.l[i_start:i_end], close=self.c[i_start:i_end])
+    longs = dict(type='scatter', name='Longs', x=np.column_stack((self.entry[self.d == 1], self.ex[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), y=np.column_stack((self.eprice[self.d == 1], self.xprice[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), mode='markers+lines', marker=dict(color='blue', size=6, symbol='triangle-up'), line=dict(color='blue', width=1))
+    shorts = dict(type='scatter', name='Shorts', x=np.column_stack((self.entry[self.d == -1], self.ex[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), y=np.column_stack((self.eprice[self.d == -1], self.xprice[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), mode='markers+lines', marker=dict(color='orange', size=6, symbol='triangle-up'), line=dict(color='orange', width=1))
+    # fig = go.Figure([candlesticks, longs, shorts], layout).show()
+    iplot({'data':[candlesticks, longs, shorts], 'layout':layout})
+    return self
 
-    candlesticks = dict(
-      type='candlestick',
-      name='Candlesticks',
-      # x=self.t,
-      x=list(range(self.n)),
-      open=self.o,
-      high=self.h,
-      low=self.l,
-      close=self.c,
-    )
-
-    longs = dict(
-      type='scatter',
-      name='Longs',
-      x=np.column_stack((self.entry[self.d == 1], self.ex[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(),
-      y=np.column_stack((self.eprice[self.d == 1], self.xprice[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(),
-      mode='markers+lines',
-      marker=dict(
-        color='blue',
-        size=6,
-        symbol='triangle-up',
-      ),
-      line=dict(
-        color='blue',
-        width=1,
-      ),
-    )
-
-    shorts = dict(
-      type='scatter',
-      name='Shorts',
-      x=np.column_stack((self.entry[self.d == -1], self.ex[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(),
-      y=np.column_stack((self.eprice[self.d == -1], self.xprice[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(),
-      mode='markers+lines',
-      marker=dict(
-        color='orange',
-        size=6,
-        symbol='triangle-up',
-      ),
-      line=dict(
-        color='orange',
-        width=1,
-      ),
-    )
-
+  def plot_orders2(self, shrink=True):
+    layout = dict(title='Trade', xaxis_title='Time', yaxis_title='Price', yaxis=dict(autorange=True, fixedrange=False))
+    candlesticks = dict(type='candlestick', name='Candlesticks', x=list(range(self.n)), open=self.o, high=self.h, low=self.l, close=self.c)
+    longs = dict(type='scatter', name='Longs', x=np.column_stack((self.entry[self.d == 1], self.ex[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), y=np.column_stack((self.eprice[self.d == 1], self.xprice[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), mode='markers+lines', marker=dict(color='blue', size=6, symbol='triangle-up'), line=dict(color='blue', width=1))
+    shorts = dict(type='scatter', name='Shorts', x=np.column_stack((self.entry[self.d == -1], self.ex[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), y=np.column_stack((self.eprice[self.d == -1], self.xprice[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), mode='markers+lines', marker=dict(color='orange', size=6, symbol='triangle-up'), line=dict(color='orange', width=1))
     # fig = go.Figure([candlesticks, longs, shorts], layout).show()
     iplot({'data':[candlesticks, longs, shorts], 'layout':layout})
     return self
 
   def plot_portfolio(self):
-    layout = dict(
-      title='Portfolio',
-      xaxis_title='Time',
-      yaxis_title='Value',
-      # xaxis_rangeslider_visible=False,
-      yaxis=dict(
-        autorange=True,
-        fixedrange=False,
-      ),
-    )
-
-    portfolio = dict(
-      type='scatter',
-      x=list(range(self.n)),
-      y=self.val,
-      mode='lines',
-      line=dict(
-        color='blue',
-        width=1,
-      ),
-    )
-
-    fig = go.Figure([portfolio], layout).show()
+    layout = dict(title='Portfolio', xaxis_title='Time', yaxis_title='Value', yaxis=dict(title='Benefit', autorange=True, fixedrange=False), yaxis2=dict(title="price",overlaying="y", side="right",position=0.15))
+    portfolio = dict(type='scatter', x=list(range(self.n)), y=self.val, mode='lines', line=dict(color='blue', width=1), fill='tozeroy', yaxis='y', name='Benefit')
+    price = dict(type='scatter', x=list(range(self.n)), y=self.c, mode='lines', line=dict(color='orange', width=2), yaxis='y2', name='price')
+    iplot({'data':[portfolio, price], 'layout':layout})
     return self
   
   def plot_concurrency(self):
-    layout = dict(
-      title='Concurrency',
-      xaxis_title='Time',
-      yaxis_title='Concurrency',
-      # xaxis_rangeslider_visible=False,
-      yaxis=dict(
-        autorange=True,
-        fixedrange=False,
-      ),
-    )
-
-    concurrency = dict(
-      type='bar',
-      x=list(range(self.n)),
-      y=self.num,
-      marker=dict(
-        color='blue',
-      ),
-
-    )
-    fig = go.Figure([concurrency], layout).show()
+    layout = dict(title='Concurrency', xaxis_title='Time', yaxis_title='Concurrency', yaxis=dict(autorange=True, fixedrange=False))
+    concurrency = dict( type='bar', x=list(range(self.n)), y=self.num, marker=dict(color='blue'))
+    iplot({'data':[concurrency], 'layout':layout})
     return self
   
