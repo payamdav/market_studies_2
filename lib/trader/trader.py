@@ -218,25 +218,26 @@ class Trader:
     iplot({'data':[candlesticks, longs, shorts], 'layout':layout})
     return self
 
-  def plot_orders2(self, shrink=True):
-    layout = dict(title='Trade', xaxis_title='Time', yaxis_title='Price', yaxis=dict(autorange=True, fixedrange=False))
-    candlesticks = dict(type='candlestick', name='Candlesticks', x=list(range(self.n)), open=self.o, high=self.h, low=self.l, close=self.c)
-    longs = dict(type='scatter', name='Longs', x=np.column_stack((self.entry[self.d == 1], self.ex[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), y=np.column_stack((self.eprice[self.d == 1], self.xprice[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), mode='markers+lines', marker=dict(color='blue', size=6, symbol='triangle-up'), line=dict(color='blue', width=1))
-    shorts = dict(type='scatter', name='Shorts', x=np.column_stack((self.entry[self.d == -1], self.ex[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), y=np.column_stack((self.eprice[self.d == -1], self.xprice[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), mode='markers+lines', marker=dict(color='orange', size=6, symbol='triangle-up'), line=dict(color='orange', width=1))
-    # fig = go.Figure([candlesticks, longs, shorts], layout).show()
-    iplot({'data':[candlesticks, longs, shorts], 'layout':layout})
-    return self
-
-  def plot_portfolio(self):
+  def plot_portfolio(self, shrink=True):
+    i_start = 0
+    i_end = self.n
+    if shrink:
+      i_start = np.min(self.entry[self.entry >= 0])
+      i_end = np.max(self.ex[self.ex >= 0])
     layout = dict(title='Portfolio', xaxis_title='Time', yaxis_title='Value', yaxis=dict(title='Benefit', autorange=True, fixedrange=False), yaxis2=dict(title="price",overlaying="y", side="right",position=0.15))
-    portfolio = dict(type='scatter', x=list(range(self.n)), y=self.val, mode='lines', line=dict(color='blue', width=1), fill='tozeroy', yaxis='y', name='Benefit')
-    price = dict(type='scatter', x=list(range(self.n)), y=self.c, mode='lines', line=dict(color='orange', width=2), yaxis='y2', name='price')
+    portfolio = dict(type='scatter', x=np.arange(i_start,i_end), y=self.val[i_start:i_end], mode='lines', line=dict(color='blue', width=1), fill='tozeroy', yaxis='y', name='Benefit')
+    price = dict(type='scatter', x=np.arange(i_start,i_end), y=self.c[i_start:i_end], mode='lines', line=dict(color='orange', width=2), yaxis='y2', name='price')
     iplot({'data':[portfolio, price], 'layout':layout})
     return self
   
-  def plot_concurrency(self):
+  def plot_concurrency(self, shrink=True):
+    i_start = 0
+    i_end = self.n
+    if shrink:
+      i_start = np.min(self.entry[self.entry >= 0])
+      i_end = np.max(self.ex[self.ex >= 0])
     layout = dict(title='Concurrency', xaxis_title='Time', yaxis_title='Concurrency', yaxis=dict(autorange=True, fixedrange=False))
-    concurrency = dict( type='bar', x=list(range(self.n)), y=self.num, marker=dict(color='blue'))
+    concurrency = dict( type='bar', x=list(range(self.n)), y=self.num[i_start:i_end], marker=dict(color='blue'))
     iplot({'data':[concurrency], 'layout':layout})
     return self
   
