@@ -43,6 +43,11 @@ class Trader:
 
       'sl_type': property_type.absolute,
       'tp_type': property_type.absolute,
+
+      'max_orders': -1,
+      'max_longs': -1,
+      'max_shorts': -1,
+      'mix_long_short': 1,
     }
 
     self.__dict__.update(defaults | kw)
@@ -137,7 +142,7 @@ class Trader:
     num = np.full(self.n, 0, dtype=np.int32)
     win = np.full(self.n, 0, dtype=np.int32)
 
-    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data, val.data, num.data, self.spread.copy().data, eprofit.data, win.data, trail.data, trail_activation.data, risk_free.data)
+    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data, val.data, num.data, self.spread.copy().data, eprofit.data, win.data, trail.data, trail_activation.data, risk_free.data, self.max_orders, self.max_longs, self.max_shorts, self.mix_long_short)
     self.reason = np.full(self.n, exit_reasons.noTrade, dtype=np.int32)
     self.ex = np.full(self.n, -1, dtype=np.int32)
     self.eprice = np.full(self.n, 0, dtype=float)
@@ -157,24 +162,28 @@ class Trader:
   
   def make_report(self):
     r = SimpleNamespace()
-    r.count = self.d.nonzero()[0].size
-    r.count_long = np.count_nonzero(self.d == 1)
-    r.count_short = np.count_nonzero(self.d == -1)
+    r.count_all = self.d.nonzero()[0].size
+    r.count = np.count_nonzero(self.reason > 0)
+    r.count_ignored = r.count_all - r.count
+    r.count_long = np.count_nonzero((self.d == 1) & (self.reason > 0))
+    r.count_short = np.count_nonzero((self.d == -1) & (self.reason > 0))
     r.count_win = np.count_nonzero(self.win)
     r.count_loss = r.count - r.count_win
     r.count_limit = np.count_nonzero(self.reason == exit_reasons.limit)
     r.win_rate = r.count_win / r.count if r.count > 0 else 0
     r.loss_rate = r.count_loss / r.count if r.count > 0 else 0
-    r.profit_long_no_spread = np.sum(self.xprice[self.d == 1] - self.eprice[self.d == 1])
-    r.profit_short_no_spread = np.sum(self.eprice[self.d == -1] - self.xprice[self.d == -1])
+    r.profit_long_no_spread = np.sum(self.xprice[(self.d == 1) & (self.reason > 0)] - self.eprice[(self.d == 1) & (self.reason > 0)])
+    r.profit_short_no_spread = np.sum(self.eprice[(self.d == -1) & (self.reason > 0)] - self.xprice[(self.d == -1) & (self.reason > 0)])
     r.profit_no_spread = r.profit_long_no_spread + r.profit_short_no_spread
-    r.profit_long = np.sum(self.eprofit[self.d == 1])
-    r.profit_short = np.sum(self.eprofit[self.d == -1])
+    r.profit_long = np.sum(self.eprofit[(self.d == 1) & (self.reason > 0)])
+    r.profit_short = np.sum(self.eprofit[(self.d == -1) & (self.reason > 0)])
     r.profit = r.profit_long + r.profit_short
     r.total_spread = r.profit_no_spread - r.profit
-    r.min_duration = np.min(self.ex[self.d != 0] - self.entry[self.d != 0])
-    r.max_duration = np.max(self.ex[self.d != 0] - self.entry[self.d != 0])
-    r.avg_duration = np.mean(self.ex[self.d != 0] - self.entry[self.d != 0])
+    
+    r.min_duration = np.min(self.ex[self.reason > 0] - self.entry[self.reason > 0])
+    r.max_duration = np.max(self.ex[self.reason > 0] - self.entry[self.reason > 0])
+    r.avg_duration = np.mean(self.ex[self.reason > 0] - self.entry[self.reason > 0])
+
     r.max_trade_count = np.max(self.num)
     r.max_portfolio_value = np.max(self.val)
     r.min_portfolio_value = np.min(self.val[self.val != 0])
@@ -183,6 +192,16 @@ class Trader:
     r.average_profit_win = r.profit_win / r.count_win if r.count_win > 0 else 0
     r.average_profit_loss = r.profit_loss / r.count_loss if r.count_loss > 0 else 0
     r.average_profit = r.profit / r.count if r.count > 0 else 0
+
+    # calculate sharpe ratio
+    val_diff = np.diff(self.val)
+    val_diff_std = np.std(val_diff)
+    r.sharpe_ratio = (np.mean(val_diff) / val_diff_std) * np.sqrt(val_diff.size) if val_diff_std > 0 else 0
+    # calculate sortino ratio
+    val_diff_loss = val_diff[val_diff < 0]
+    val_diff_loss_std = np.std(val_diff_loss)
+    r.sortino_ratio = (np.mean(val_diff) / val_diff_loss_std) * np.sqrt(val_diff_loss.size) if val_diff_loss_std > 0 else 0
+
     self.report = r
     return self
   
@@ -192,8 +211,10 @@ class Trader:
     return self
   
   def period_report(self, period):
-    df = pd.DataFrame({'t': self.t, 'eprofit': self.eprofit, 'd': np.abs(self.d), 'win': self.win})
-    r = df.groupby(pd.Grouper(key='t', freq=period)).sum().copy()
+    ddd = np.where((self.d != 0) & (self.reason > 0), 1, 0)
+    df = pd.DataFrame({'t': self.t, 'eprofit': self.eprofit, 'd': ddd, 'win': self.win})
+    # r = df.groupby(pd.Grouper(key='t', freq=period)).sum().copy()
+    r = df.groupby(pd.Grouper(key='t', freq=period)).sum()
     r['win_rate'] = np.where(r['d'] > 0, r['win'] / r['d'], 0)
     r['profit'] = np.where(r['d'] > 0, r['eprofit'], 0)
     r['count'] = r['d']
@@ -212,8 +233,8 @@ class Trader:
       i_end = np.max(self.ex[self.ex >= 0])
     layout = dict(title='Trade', xaxis_title='Time', yaxis_title='Price', yaxis=dict(autorange=True, fixedrange=False))
     candlesticks = dict(type='candlestick', name='Candlesticks', x=np.arange(i_start,i_end), open=self.o[i_start:i_end], high=self.h[i_start:i_end], low=self.l[i_start:i_end], close=self.c[i_start:i_end])
-    longs = dict(type='scatter', name='Longs', x=np.column_stack((self.entry[self.d == 1], self.ex[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), y=np.column_stack((self.eprice[self.d == 1], self.xprice[self.d == 1], np.full(np.count_nonzero(self.d == 1), None))).ravel(), mode='markers+lines', marker=dict(color='blue', size=6, symbol='triangle-up'), line=dict(color='blue', width=1))
-    shorts = dict(type='scatter', name='Shorts', x=np.column_stack((self.entry[self.d == -1], self.ex[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), y=np.column_stack((self.eprice[self.d == -1], self.xprice[self.d == -1], np.full(np.count_nonzero(self.d == -1), None))).ravel(), mode='markers+lines', marker=dict(color='orange', size=6, symbol='triangle-up'), line=dict(color='orange', width=1))
+    longs = dict(type='scatter', name='Longs', x=np.column_stack((self.entry[(self.d == 1) & (self.reason > 0)], self.ex[(self.d == 1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == 1) & (self.reason > 0)), None))).ravel(), y=np.column_stack((self.eprice[(self.d == 1) & (self.reason > 0)], self.xprice[(self.d == 1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == 1) & (self.reason > 0)), None))).ravel(), mode='markers+lines', marker=dict(color='blue', size=6, symbol='triangle-up'), line=dict(color='blue', width=1))
+    shorts = dict(type='scatter', name='Shorts', x=np.column_stack((self.entry[(self.d == -1) & (self.reason > 0)], self.ex[(self.d == -1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == -1) & (self.reason > 0)), None))).ravel(), y=np.column_stack((self.eprice[(self.d == -1) & (self.reason > 0)], self.xprice[(self.d == -1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == -1) & (self.reason > 0)), None))).ravel(), mode='markers+lines', marker=dict(color='orange', size=6, symbol='triangle-up'), line=dict(color='orange', width=1))
     # fig = go.Figure([candlesticks, longs, shorts], layout).show()
     iplot({'data':[candlesticks, longs, shorts], 'layout':layout})
     return self

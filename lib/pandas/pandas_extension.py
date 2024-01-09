@@ -134,6 +134,19 @@ class LibsAccessor():
     temp_atr = tr.ewm(span=period, adjust=False).mean()
     return pd.Series(temp_atr, index=self.df.index, name=f"atr{period}")
   
+  def csize(self, period):
+    # average candles size
+    temp = self.df.h - self.df.l
+    temp_ma = temp.ext.ma(period)
+    temp_ma.name = f"csize{period}"
+    return temp_ma
+  
+  def cbsize(self, period):
+    # average candles body size
+    temp = (self.df.o - self.df.c).abs()
+    temp_ma = temp.ext.ma(period)
+    temp_ma.name = f"cbsize{period}"
+    return temp_ma
   
   
 
