@@ -9,8 +9,6 @@ from matplotlib import pyplot as plt
 from matplotlib.widgets import Cursor
 
 
-timer = TimerProfiler('pandas_extension')
-
 def ewm_weights(period, *,alpha=None, com=None, span=None):
   if all([x is None for x in [alpha, com, span]]):
     span = period
@@ -97,6 +95,7 @@ class LibsAccessor():
     plt.show()
   
   def kde_anal(self, p_step=0.0001, bw=0.001):
+    timer = TimerProfiler('pandas_extension')
     timer.checkpoint('start')
     d = self.df[['h', 'l', 'c']].to_numpy().reshape(-1)
     dv = self.df[['v', 'v', 'v']].to_numpy().reshape(-1)
