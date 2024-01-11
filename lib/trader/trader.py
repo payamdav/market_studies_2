@@ -138,11 +138,12 @@ class Trader:
     eprice = np.full(trade_count, 0, dtype=float)
     xprice = np.full(trade_count, 0, dtype=float)
     val = np.full(self.n, 0, dtype=float)
+    netval = np.full(self.n, 0, dtype=float)
     eprofit = np.full(self.n, 0, dtype=float)
     num = np.full(self.n, 0, dtype=np.int32)
     win = np.full(self.n, 0, dtype=np.int32)
 
-    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data, val.data, num.data, self.spread.copy().data, eprofit.data, win.data, trail.data, trail_activation.data, risk_free.data, self.max_orders, self.max_longs, self.max_shorts, self.mix_long_short)
+    hyperTrader(self.o.copy().data, self.h.copy().data, self.l.copy().data, self.c.copy().data, self.p.copy().data, d.data, entry.data, ex.data, reason.data, limit.data, tp.data, sl.data, eprice.data, xprice.data, val.data, num.data, self.spread.copy().data, eprofit.data, win.data, trail.data, trail_activation.data, risk_free.data, netval.data, self.max_orders, self.max_longs, self.max_shorts, self.mix_long_short)
     self.reason = np.full(self.n, exit_reasons.noTrade, dtype=np.int32)
     self.ex = np.full(self.n, -1, dtype=np.int32)
     self.eprice = np.full(self.n, 0, dtype=float)
@@ -154,10 +155,11 @@ class Trader:
     self.xprice[entry] = xprice
     self.entry[entry] = entry
     self.val = val
+    self.netval = netval
     self.num = num
+    self.valdiff = np.diff(self.val, prepend=self.val[0])
     self.win = win
     self.eprofit = eprofit
-
     return self
   
   def make_report(self):
@@ -202,6 +204,12 @@ class Trader:
     val_diff_loss_std = np.std(val_diff_loss)
     r.sortino_ratio = (np.mean(val_diff) / val_diff_loss_std) * np.sqrt(val_diff_loss.size) if val_diff_loss_std > 0 else 0
 
+    r.normalized_profit = r.profit / r.max_trade_count if r.max_trade_count > 0 else 0
+
+    dpl = self.daily_pandl()
+    r.max_normalized_daily_drawdown = np.min(dpl + self.daily_netval()) / r.max_trade_count if r.max_trade_count > 0 else 0
+    r.max_normalized_total_daily_drawdown = np.min(np.cumsum(dpl)) / r.max_trade_count if r.max_trade_count > 0 else 0
+
     self.report = r
     return self
   
@@ -219,6 +227,19 @@ class Trader:
     r['profit'] = np.where(r['d'] > 0, r['eprofit'], 0)
     r['count'] = r['d']
     r = r[['count', 'win_rate', 'profit']]
+    return r
+  
+  def daily_pandl(self):
+    period = '1D'
+    s = pd.Series(self.valdiff, index=self.t)
+    r = s.groupby(pd.Grouper(freq=period)).sum()
+    return r
+
+  def daily_netval(self):
+    period = '1D'
+    s = pd.Series(self.netval, index=self.t)
+    r = s.groupby(pd.Grouper(freq=period)).last()
+    r = r.shift(1, fill_value=0)
     return r
 
   def plot(self):
@@ -262,3 +283,35 @@ class Trader:
     iplot({'data':[concurrency], 'layout':layout})
     return self
   
+  def plot_valdiffnorm(self, shrink=True):
+    i_start = 0
+    i_end = self.n
+    if shrink:
+      i_start = np.min(self.entry[self.entry >= 0])
+      i_end = np.max(self.ex[self.ex >= 0])
+    layout = dict(title='Portfolio', xaxis_title='Time', yaxis_title='Value', yaxis=dict(title='Benefit', autorange=True, fixedrange=False), yaxis2=dict(title="price",overlaying="y", side="right",position=0.15))
+    valdiffnormp = dict(type='scatter', x=np.arange(i_start,i_end), y=self.valdiffnorm[i_start:i_end], mode='lines', line=dict(color='green', width=1), yaxis='y', name='netval')
+    iplot({'data':[valdiffnormp], 'layout':layout})
+    return self
+  
+  def plot_total_daily_drawdown(self):
+    if self.report.max_trade_count == 0:
+      return
+    dd = self.daily_pandl() / self.report.max_trade_count
+    dd_cum = dd.cumsum()
+    layout = dict(title='Total Daily Drawdown', xaxis_title='Time', yaxis_title='Value', yaxis=dict(title='Benefit', autorange=True, fixedrange=False), yaxis2=dict(title="price",overlaying="y", side="right",position=0.15))
+    dd_trace = dict( type='bar', x=dd.index, y=dd, marker=dict(color='blue', opacity=0.6), name='daily_drawdown')
+    dd_cum_trace = dict(type='scatter', x=dd_cum.index, y=dd_cum, mode='lines', line=dict(color='green', width=2), yaxis='y', name='daily_drawdown_cum')
+    hor = dict(type='scatter', x=dd.index, y=np.full(len(dd), -0.1), mode='lines', line=dict(color='red', width=0.5), yaxis='y', name='0.05')
+    iplot({'data':[dd_trace, dd_cum_trace, hor], 'layout':layout})
+    return self
+  
+  def plot_daily_drawdown(self):
+    if self.report.max_trade_count == 0:
+      return
+    dd = (self.daily_pandl() + self.daily_netval()) / self.report.max_trade_count
+    layout = dict(title='Daily Drawdown', xaxis_title='Time', yaxis_title='Value', yaxis=dict(title='Benefit', autorange=True, fixedrange=False), yaxis2=dict(title="price",overlaying="y", side="right",position=0.15))
+    dd_trace = dict( type='bar', x=dd.index, y=dd, marker=dict(color='blue', opacity=0.6), name='daily_drawdown')
+    hor = dict(type='scatter', x=dd.index, y=np.full(len(dd), -0.05), mode='lines', line=dict(color='red', width=0.5), yaxis='y', name='0.05')
+    iplot({'data':[dd_trace, hor], 'layout':layout})
+    return self
