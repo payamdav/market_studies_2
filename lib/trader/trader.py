@@ -220,13 +220,14 @@ class Trader:
   
   def period_report(self, period):
     ddd = np.where((self.d != 0) & (self.reason > 0), 1, 0)
-    df = pd.DataFrame({'t': self.t, 'eprofit': self.eprofit, 'd': ddd, 'win': self.win})
+    df = pd.DataFrame({'t': self.t, 'eprofit': self.eprofit, 'd': ddd, 'win': self.win, 'valdiff': self.valdiff})
     # r = df.groupby(pd.Grouper(key='t', freq=period)).sum().copy()
     r = df.groupby(pd.Grouper(key='t', freq=period)).sum()
     r['win_rate'] = np.where(r['d'] > 0, r['win'] / r['d'], 0)
-    r['profit'] = np.where(r['d'] > 0, r['eprofit'], 0)
+    r['profit'] = r['valdiff']
+    r['profit_by_entry'] = np.where(r['d'] > 0, r['eprofit'], 0)
     r['count'] = r['d']
-    r = r[['count', 'win_rate', 'profit']]
+    r = r[['count', 'win_rate', 'profit_by_entry', 'profit']]
     return r
   
   def daily_pandl(self):
