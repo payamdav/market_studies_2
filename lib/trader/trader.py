@@ -198,11 +198,13 @@ class Trader:
     # calculate sharpe ratio
     val_diff = np.diff(self.val)
     val_diff_std = np.std(val_diff)
-    r.sharpe_ratio = (np.mean(val_diff) / val_diff_std) * np.sqrt(val_diff.size) if val_diff_std > 0 else 0
+    # r.sharpe_ratio = (np.mean(val_diff) / val_diff_std) * np.sqrt(val_diff.size) if val_diff_std > 0 else 0
+    r.sharpe_ratio = (np.mean(val_diff) / val_diff_std) if val_diff_std > 0 else 0
     # calculate sortino ratio
     val_diff_loss = val_diff[val_diff < 0]
     val_diff_loss_std = np.std(val_diff_loss)
-    r.sortino_ratio = (np.mean(val_diff) / val_diff_loss_std) * np.sqrt(val_diff_loss.size) if val_diff_loss_std > 0 else 0
+    # r.sortino_ratio = (np.mean(val_diff) / val_diff_loss_std) * np.sqrt(val_diff_loss.size) if val_diff_loss_std > 0 else 0
+    r.sortino_ratio = (np.mean(val_diff) / val_diff_loss_std) if val_diff_loss_std > 0 else 0
 
     r.normalized_profit = r.profit / r.max_trade_count if r.max_trade_count > 0 else 0
 
@@ -247,18 +249,32 @@ class Trader:
     self.plot_orders()
     return self
   
-  def plot_orders(self, shrink=True):
+  def plot_orders(self, shrink=True, candles='candles'):
+    traces = []
     i_start = 0
     i_end = self.n
     if shrink:
       i_start = np.min(self.entry[self.entry >= 0])
       i_end = np.max(self.ex[self.ex >= 0])
-    layout = dict(title='Trade', xaxis_title='Time', yaxis_title='Price', yaxis=dict(autorange=True, fixedrange=False))
-    candlesticks = dict(type='candlestick', name='Candlesticks', x=np.arange(i_start,i_end), open=self.o[i_start:i_end], high=self.h[i_start:i_end], low=self.l[i_start:i_end], close=self.c[i_start:i_end])
-    longs = dict(type='scatter', name='Longs', x=np.column_stack((self.entry[(self.d == 1) & (self.reason > 0)], self.ex[(self.d == 1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == 1) & (self.reason > 0)), None))).ravel(), y=np.column_stack((self.eprice[(self.d == 1) & (self.reason > 0)], self.xprice[(self.d == 1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == 1) & (self.reason > 0)), None))).ravel(), mode='markers+lines', marker=dict(color='blue', size=6, symbol='triangle-up'), line=dict(color='blue', width=1))
-    shorts = dict(type='scatter', name='Shorts', x=np.column_stack((self.entry[(self.d == -1) & (self.reason > 0)], self.ex[(self.d == -1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == -1) & (self.reason > 0)), None))).ravel(), y=np.column_stack((self.eprice[(self.d == -1) & (self.reason > 0)], self.xprice[(self.d == -1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == -1) & (self.reason > 0)), None))).ravel(), mode='markers+lines', marker=dict(color='orange', size=6, symbol='triangle-up'), line=dict(color='orange', width=1))
+    layout = dict(title='Trade', xaxis_title='Time', yaxis_title='Price', yaxis=dict(autorange=True, fixedrange=False), xaxis_rangeslider_visible=False)
+
+    if candles == 'candles':
+      traces.append(dict(type='candlestick', name='Candlesticks', x=np.arange(i_start,i_end), open=self.o[i_start:i_end], high=self.h[i_start:i_end], low=self.l[i_start:i_end], close=self.c[i_start:i_end]))
+    elif candles == 'line':
+      traces.append(dict(type='scatter', name='Close', x=np.arange(i_start,i_end), y=self.c[i_start:i_end], mode='lines', line=dict(color='black', width=1)))
+    elif candles == 'lines':
+      traces.append(dict(type='scatter', name='High', x=np.arange(i_start,i_end), y=self.h[i_start:i_end], mode='lines', line=dict(color='green', width=1)))
+      traces.append(dict(type='scatter', name='Low', x=np.arange(i_start,i_end), y=self.l[i_start:i_end], mode='lines', line=dict(color='red', width=1)))
+    elif candles == '4lines':
+      traces.append(dict(type='scatter', name='High', x=np.arange(i_start,i_end), y=self.h[i_start:i_end], mode='lines', line=dict(color='green', width=1)))
+      traces.append(dict(type='scatter', name='Low', x=np.arange(i_start,i_end), y=self.l[i_start:i_end], mode='lines', line=dict(color='red', width=1)))
+      traces.append(dict(type='scatter', name='Open', x=np.arange(i_start,i_end), y=self.o[i_start:i_end], mode='lines', line=dict(color='cyan', width=1)))
+      traces.append(dict(type='scatter', name='Close', x=np.arange(i_start,i_end), y=self.c[i_start:i_end], mode='lines', line=dict(color='orange', width=1)))
+
+    traces.append(dict(type='scatter', name='Longs', x=np.column_stack((self.entry[(self.d == 1) & (self.reason > 0)], self.ex[(self.d == 1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == 1) & (self.reason > 0)), None))).ravel(), y=np.column_stack((self.eprice[(self.d == 1) & (self.reason > 0)], self.xprice[(self.d == 1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == 1) & (self.reason > 0)), None))).ravel(), mode='markers+lines', marker=dict(color='blue', size=6, symbol='triangle-up'), line=dict(color='blue', width=1)))
+    traces.append(dict(type='scatter', name='Shorts', x=np.column_stack((self.entry[(self.d == -1) & (self.reason > 0)], self.ex[(self.d == -1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == -1) & (self.reason > 0)), None))).ravel(), y=np.column_stack((self.eprice[(self.d == -1) & (self.reason > 0)], self.xprice[(self.d == -1) & (self.reason > 0)], np.full(np.count_nonzero((self.d == -1) & (self.reason > 0)), None))).ravel(), mode='markers+lines', marker=dict(color='orange', size=6, symbol='triangle-up'), line=dict(color='orange', width=1)))
     # fig = go.Figure([candlesticks, longs, shorts], layout).show()
-    iplot({'data':[candlesticks, longs, shorts], 'layout':layout})
+    iplot({'data':traces, 'layout':layout})
     return self
 
   def plot_portfolio(self, shrink=True):

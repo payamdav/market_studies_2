@@ -7,6 +7,7 @@ from lib.utils.timer import TimerProfiler
 from KDEpy import FFTKDE, NaiveKDE, TreeKDE
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Cursor
+from lib.indicators.labelBySlope import labelBySlope
 
 
 def ewm_weights(period, *,alpha=None, com=None, span=None):
@@ -264,3 +265,12 @@ class LibsAccessorSerries():
   def wema(self, period, weights):
     return self.s.ext.wma(period, weights=weights).ewm(span=period, adjust=False).mean()
   
+  def labeler_by_slope(self, period):
+    return pd.Series(labelBySlope(self.s, period)[0], index=self.s.index, name=f"{self.s.name}_labeler_by_slope{period}")
+
+  def labeler_by_slope_degrees(self, period):
+    return pd.Series(labelBySlope(self.s, period)[1], index=self.s.index, name=f"{self.s.name}_labeler_by_slope_degrees{period}")
+
+  def labeler_by_slope_sines(self, period):
+    return pd.Series(labelBySlope(self.s, period)[2], index=self.s.index, name=f"{self.s.name}_labeler_by_slope_sines{period}")
+   

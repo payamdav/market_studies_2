@@ -72,7 +72,7 @@ layout_price_volume = dict(
     spikethickness=1,
   ),
 
-  yaxis3=dict(
+  yaxis2=dict(
     title='Volume',
     domain=[0, 0.15],
     autorange=True,
