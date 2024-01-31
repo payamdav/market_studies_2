@@ -1,3 +1,4 @@
+from plotly import graph_objs as go
 
 
 layout_price_indicator_volume = dict(
@@ -77,7 +78,19 @@ layout_price_volume = dict(
     domain=[0, 0.15],
     autorange=True,
     fixedrange=False,
+  ),
+
+  xaxis2=dict(
+    domain=[0, 1],
+    anchor= 'y',
+    overlaying= 'x',
+    side= 'top',
+    autorange=False,
+    range=[0,1],
+    fixedrange=True,
+    visible=False,
   )
+
 )
 
 
@@ -149,3 +162,13 @@ layout_simple_double_x = dict(
   )
 
 )
+
+
+def plot(*, traces=[], shapes=[], layout=layout_simple):
+  if (isinstance(layout, str)):
+    layout = eval(f'layout_{layout}')
+
+  fig = go.Figure(data=traces, layout=layout)
+  fig.update_layout(shapes=shapes)
+  fig.show()
+  return fig

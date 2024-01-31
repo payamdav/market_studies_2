@@ -3,6 +3,7 @@ import numpy as np
 from lib.rates.rates import rate_load
 from lib.trader.trader import Trader
 from lib.indicators.linearRegression import linearRegression, linearRegression_predict, linearRegression_predict_upto
+from lib.indicators.zigzag import zigzag
 from lib.utils.timer import TimerProfiler
 from KDEpy import FFTKDE, NaiveKDE, TreeKDE
 from matplotlib import pyplot as plt
@@ -148,6 +149,16 @@ class LibsAccessor():
     temp_ma.name = f"cbsize{period}"
     return temp_ma
   
+  def zigzag(self, d:np.ndarray | float) -> (np.ndarray, np.ndarray):
+    return zigzag(self.df.h.to_numpy(), self.df.l.to_numpy(), d)
+
+  def zigzag_line(self, d:np.ndarray | float) -> pd.Series:
+    h, l = zigzag(self.df.h.to_numpy(), self.df.l.to_numpy(), d)
+    zz = pd.Series(np.nan, index=self.df.index)
+    zz[h] = self.df.h[h]
+    zz[l] = self.df.l[l]
+    return zz
+  
   
 
 
@@ -273,4 +284,15 @@ class LibsAccessorSerries():
 
   def labeler_by_slope_sines(self, period):
     return pd.Series(labelBySlope(self.s, period)[2], index=self.s.index, name=f"{self.s.name}_labeler_by_slope_sines{period}")
-   
+
+  def zigzag(self, d:np.ndarray | float) -> (np.ndarray, np.ndarray):
+    nparray = self.s.to_numpy()
+    return zigzag(nparray, nparray, d)
+
+  def zigzag_line(self, d:np.ndarray | float) -> pd.Series:
+    nparray = self.s.to_numpy()
+    h, l = zigzag(nparray, nparray, d)
+    zz = pd.Series(np.nan, index=self.s.index)
+    zz[h] = self.s[h]
+    zz[l] = self.s[l]
+    return zz

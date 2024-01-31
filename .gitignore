@@ -129,3 +129,10 @@ files/features/
 files/temp/
 /*.py
 /studies/
+files/rates/BTCUSDT.feather
+files/rates/ETHUSDT.feather
+levels_p_major.pickle
+levels_t_major.pickle
+levels_p_minor.pickle
+levels_t_minor.pickle
+reversal_pattern_rbd.pkl
